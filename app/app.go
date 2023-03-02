@@ -89,6 +89,10 @@ import (
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/uwezukwechibuzor/Identico/cmd"
+
+	"github.com/uwezukwechibuzor/identico/x/did"
+	didkeeper "github.com/uwezukwechibuzor/identico/x/did/keeper"
+	didtypes "github.com/uwezukwechibuzor/identico/x/did/types"
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 )
 
@@ -136,6 +140,8 @@ var (
 				upgraderest.ProposalCancelRESTHandler,
 			),
 		),
+
+		did.AppModuleBasic{},
 	)
 
 	// module account permissions
@@ -203,6 +209,8 @@ type App struct {
 	ScopedICAHostKeeper     capabilitykeeper.ScopedKeeper
 	ScopedCCVConsumerKeeper capabilitykeeper.ScopedKeeper
 
+	DidKeeper      didkeeper.keeper
+
 	// mm is the module manager
 	mm *module.Manager
 
@@ -234,10 +242,21 @@ func New(
 	bApp.SetInterfaceRegistry(interfaceRegistry)
 
 	keys := sdk.NewKVStoreKeys(
-		authtypes.StoreKey, authz.ModuleName, banktypes.StoreKey, slashingtypes.StoreKey,
-		paramstypes.StoreKey, ibchost.StoreKey, upgradetypes.StoreKey, feegrant.StoreKey, evidencetypes.StoreKey,
-		ibctransfertypes.StoreKey, icahosttypes.StoreKey, capabilitytypes.StoreKey, ccvconsumertypes.StoreKey,
+		authtypes.StoreKey, 
+		authz.ModuleName, 
+		banktypes.StoreKey, 
+		slashingtypes.StoreKey,
+		paramstypes.StoreKey, 
+		ibchost.StoreKey, 
+		upgradetypes.StoreKey, 
+		feegrant.StoreKey, 
+		evidencetypes.StoreKey,
+		ibctransfertypes.StoreKey, 
+		icahosttypes.StoreKey, 
+		capabilitytypes.StoreKey, 
+		ccvconsumertypes.StoreKey,
 		adminmodulemoduletypes.StoreKey,
+		didtypes.StoreKey,
 	)
 	tkeys := sdk.NewTransientStoreKeys(paramstypes.TStoreKey)
 	memKeys := sdk.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
@@ -413,6 +432,13 @@ func New(
 	)
 	adminModule := adminmodulemodule.NewAppModule(appCodec, app.AdminmoduleKeeper)
 
+
+	app.DidKeeper = *didkeeper.NewKeeper(
+		appCodec,
+		keys[didtypes.StoreKey],
+		keys[didtypes.MemStoreKey],
+	)
+
 	// Create static IBC router, add transfer route, then set and seal it
 	ibcRouter := ibcporttypes.NewRouter()
 	ibcRouter.AddRoute(icahosttypes.SubModuleName, icaHostIBCModule).
@@ -447,6 +473,7 @@ func New(
 		icaModule,
 		consumerModule,
 		adminModule,
+		did.NewAppModule(appCodec, app.DidKeeper),
 	)
 
 	// During begin block slashing happens after distr.BeginBlocker so that
@@ -471,6 +498,7 @@ func New(
 		vestingtypes.ModuleName,
 		ccvconsumertypes.ModuleName,
 		adminmodulemoduletypes.ModuleName,
+		didtypes.ModuleName,
 	)
 
 	app.mm.SetOrderEndBlockers(
@@ -490,6 +518,7 @@ func New(
 		vestingtypes.ModuleName,
 		ccvconsumertypes.ModuleName,
 		adminmodulemoduletypes.ModuleName,
+		didtypes.ModuleName,
 	)
 
 	// NOTE: The genutils module must occur after staking so that pools are
@@ -514,6 +543,7 @@ func New(
 		vestingtypes.ModuleName,
 		ccvconsumertypes.ModuleName,
 		adminmodulemoduletypes.ModuleName,
+		didtypes.ModuleName,
 	)
 
 	// Uncomment if you want to set a custom migration order here.
@@ -731,6 +761,7 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(ibchost.ModuleName)
 	paramsKeeper.Subspace(icahosttypes.SubModuleName)
 	paramsKeeper.Subspace(ccvconsumertypes.ModuleName)
+	paramsKeeper.Subspace(didtypes.ModuleName)
 
 	return paramsKeeper
 }
